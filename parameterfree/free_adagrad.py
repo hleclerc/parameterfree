@@ -45,13 +45,14 @@ class FREE_ADAGRAD(Optimizer):
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
-        
+
+        if len(self.param_groups) > 1:
+            raise RuntimeError('FREE_ADAGRAD only supports 1 param group')
+
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
-                if p.grad.is_sparse:
-                    raise RuntimeError('FREE_ADAGRAD does not support sparse gradients')
 
                 # State initialization
                 state = self.state[p]
@@ -114,19 +115,23 @@ class FREE_ADAGRAD_mean:
         if self.output is None:
             self.output = [torch.clone(p.data) for p in params]
         else:
-            for ind in range(len(params)):
-                self.output[ind] = (self.output[ind] * self.n + params[ind].data) / (self.n + 1)
+            ind = 0
+            for p in params:
+                self.output[ind] = (self.output[ind] * self.n + p.data) / (self.n + 1)
+                ind += 1
                 
         self.n += 1
 
     def set(self, params):
         """ assign output (the mean) to parameters """ 
         
-        for ind in range(len(params)):
-            params[ind].data = self.output[ind]
+        ind = 0
+        for p in params:
+            p.data = self.output[ind]
+            ind += 1
 
 class FREE_ADAGRAD_low_pass_filter:
-    r"""Class that helps calculate a (one degree recursive) low pass filter of the parameters (as a function of iteration).
+    r"""Class that helps calculate a (first order recursive) low pass filter of the parameters (as a function of #iteration).
         output = (1 - self.coeff) * output + self.coeff * parameters
     Arguments:
         coeff (float): how much the new parameter value is taken into account at each new iteration
@@ -157,14 +162,18 @@ class FREE_ADAGRAD_low_pass_filter:
         if self.output is None:
             self.output = [torch.clone(p.data) for p in params]
         else:
-            for ind in range(len(params)):
-                self.output[ind] = (1 - self.coeff) * self.output[ind] + self.coeff * params[ind].data
+            ind = 0
+            for p in params:
+                self.output[ind] = (1 - self.coeff) * self.output[ind] + self.coeff * p.data
+                ind += 1
 
     def set(self, params):
         """ assign output (the low pass filter) to parameters """ 
         
-        for ind in range(len(params)):
-            params[ind].data = self.output[ind]
+        ind = 0
+        for p in params:
+            p.data = self.output[ind]
+            ind += 1
 
 class FREE_ADAGRAD_sliding_mean:
     r"""Class that helps calculate a sliding mean of the parameters (as a function of iteration).
@@ -200,8 +209,10 @@ class FREE_ADAGRAD_sliding_mean:
 
     def set(self, params):
         """ assign output (the sliding mean) to parameters """ 
-        
+
+        ind = 0        
         no = len(self.outputs)
-        for ind in range(len(params)):
-            params[ind].data = sum([output[ind] for output in self.outputs]) / no
+        for p in params:
+            p.data = sum([output[ind] for output in self.outputs]) / no
+            ind += 1
 
